@@ -1,4 +1,4 @@
-###################################################################
+ ###################################################################
 #
 # Copyright (C) 2010-2017 Codership Oy <info@codership.com>
 #
@@ -620,8 +620,8 @@ if strict_build_flags == 1:
         if 'ccache' in conf.env['CXX'] or 'ccache' in conf.env['CC']:
             conf.env.Append(CCFLAGS = ' -Qunused-arguments')
 # Enable libstdc++ assertions in debug build.
-if int(debug) >= 0:
-    conf.env.Append(CXXFLAGS = " -D_GLIBCXX_ASSERTIONS")
+#if int(debug) >= 0:
+#    conf.env.Append(CXXFLAGS = " -D_GLIBCXX_ASSERTIONS")
 
 if conf.CheckWeffcpp():
     conf.env.Prepend(CXXFLAGS = '-Weffc++ ')
