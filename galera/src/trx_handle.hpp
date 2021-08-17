@@ -77,7 +77,8 @@ namespace galera
             F_ANNOTATION  = 1 << 5,
             F_ISOLATION   = 1 << 6,
             F_PA_UNSAFE   = 1 << 7,
-            F_PREORDERED  = 1 << 8
+            F_PREORDERED  = 1 << 8,
+            F_PA_SKIPBINLOG = 1 << 9
         };
 
         static inline uint32_t wsrep_flags_to_trx_flags (uint32_t flags)
@@ -91,6 +92,7 @@ namespace galera
 
             if (flags & WSREP_FLAG_ISOLATION)   ret |= F_ISOLATION;
             if (flags & WSREP_FLAG_PA_UNSAFE)   ret |= F_PA_UNSAFE;
+            if (flags & WSREP_FLAG_SKIP_BINLOG) ret |= F_PA_SKIPBINLOG;
 
             return ret;
         }
@@ -106,6 +108,7 @@ namespace galera
 
             if (flags & F_ISOLATION)   ret |= WSREP_FLAG_ISOLATION;
             if (flags & F_PA_UNSAFE)   ret |= WSREP_FLAG_PA_UNSAFE;
+            if (flags & F_PA_SKIPBINLOG) ret |= WSREP_FLAG_SKIP_BINLOG;
 
             return ret;
         }
@@ -121,6 +124,7 @@ namespace galera
 
             if (flags & WriteSetNG::F_TOI)       ret |= F_ISOLATION;
             if (flags & WriteSetNG::F_PA_UNSAFE) ret |= F_PA_UNSAFE;
+            if (flags & WriteSetNG::F_PA_SKIPBINLOG) ret |= F_PA_SKIPBINLOG;
 
             return ret;
         }
@@ -361,6 +365,7 @@ namespace galera
                 uint16_t ws_flags(flags & COMMON_FLAGS_MASK);
                 if (flags & F_ISOLATION) ws_flags |= WriteSetNG::F_TOI;
                 if (flags & F_PA_UNSAFE) ws_flags |= WriteSetNG::F_PA_UNSAFE;
+                if (flags & F_PA_SKIPBINLOG) ws_flags |= WriteSetNG::F_PA_SKIPBINLOG;
                 write_set_out().set_flags(ws_flags);
             }
         }
