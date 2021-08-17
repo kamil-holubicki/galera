@@ -884,6 +884,7 @@ wsrep_status_t galera_to_execute_start(wsrep_t*                const gh,
                                        size_t                  const keys_num,
                                        const struct wsrep_buf* const data,
                                        size_t                  const count,
+                                       uint32_t                const flags,
                                        wsrep_trx_meta_t*       const meta)
 {
     assert(gh != 0);
@@ -910,7 +911,7 @@ wsrep_status_t galera_to_execute_start(wsrep_t*                const gh,
         append_data_array(trx, data, count, WSREP_DATA_ORDERED, false);
 
         trx->set_flags(TrxHandle::wsrep_flags_to_trx_flags(
-                           WSREP_FLAG_COMMIT |
+                           flags | WSREP_FLAG_COMMIT |
                            WSREP_FLAG_ISOLATION));
 
         retval = repl->replicate(trx, meta);

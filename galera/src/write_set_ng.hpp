@@ -104,7 +104,8 @@ namespace galera
             F_TOI         = 1 << 2,
             F_PA_UNSAFE   = 1 << 3,
             F_COMMUTATIVE = 1 << 4,
-            F_NATIVE      = 1 << 5
+            F_NATIVE      = 1 << 5,
+            F_PA_SKIPBINLOG = 1 << 6
         };
 
         /* this takes care of converting wsrep API flags to on-the-wire flags */
