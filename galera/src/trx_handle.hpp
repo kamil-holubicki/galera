@@ -70,6 +70,7 @@ namespace galera
             F_PREPARE     = 1 << 7,
             F_SNAPSHOT    = 1 << 8,
             F_IMPLICIT_DEPS = 1 << 9,
+            F_PA_SKIPBINLOG = 1 << 10,
             /*
              * reserved for API extension
              */
@@ -79,7 +80,7 @@ namespace galera
              */
         };
 
-        static const uint32_t TRXHANDLE_FLAGS_MASK = (1 << 15) | ((1 << 10) - 1);
+        static const uint32_t TRXHANDLE_FLAGS_MASK = (1 << 15) | ((1 << 11) - 1);
         static const uint32_t EXPLICIT_ROLLBACK_FLAGS = F_PA_UNSAFE | F_ROLLBACK;
 
         static bool const FLAGS_MATCH_API_FLAGS =
@@ -93,6 +94,7 @@ namespace galera
                                   WSREP_FLAG_TRX_PREPARE == F_PREPARE      &&
                                   WSREP_FLAG_SNAPSHOT    == F_SNAPSHOT     &&
                                   WSREP_FLAG_IMPLICIT_DEPS == F_IMPLICIT_DEPS &&
+                                  WSREP_FLAG_SKIP_BINLOG == F_PA_SKIPBINLOG &&
                                   int(WriteSetNG::F_PREORDERED) ==F_PREORDERED);
 
         static uint32_t wsrep_flags_to_trx_flags (uint32_t flags);
