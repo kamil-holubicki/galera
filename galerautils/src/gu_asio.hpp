@@ -482,7 +482,20 @@ namespace gu
         {
             if (b->size() > 0)
             {
-                written += socket.write(AsioConstBuffer(b->data(), b->size()));
+                // avoid allocating huge buffers, so send it in chunks
+                static const ssize_t send_buf_size = 32* 1024;
+                unsigned char send_buf[send_buf_size];
+                const unsigned char* src_ptr = reinterpret_cast<const unsigned char*>(b->data());
+                ssize_t to_send = b->size();
+
+                while (to_send > 0) {
+                    ssize_t send_chunk_size = std::min(to_send, send_buf_size);
+                    memcpy(send_buf, src_ptr, send_chunk_size);
+                    size_t sent = socket.write(AsioConstBuffer(send_buf, send_chunk_size));
+                    written += sent;
+                    to_send -= sent;
+                    src_ptr += sent;
+                }
             }
         }
         return written;

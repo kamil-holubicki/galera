@@ -668,15 +668,27 @@ namespace galera
                             wsize = msg.len() - offset;
 
                             void*   const ptr(gcache_.malloc(wsize));
-                            ssize_t const r
-                                (socket.read(gu::AsioMutableBuffer(ptr, wsize)));
+                            // avoid allocating huge buffers, so receive it in chunks
+                            static const ssize_t recv_buf_size = 32* 1024;
+                            unsigned char recv_buf[recv_buf_size];
+                            unsigned char* write_ptr = reinterpret_cast<unsigned char*>(ptr);
+                            ssize_t received = 0;
 
-                            if (gu_unlikely(r != wsize))
+                            while (received < wsize) {
+                                ssize_t recv_chunk_size = std::min(wsize-received, recv_buf_size);
+                                ssize_t const r
+                                    (socket.read(gu::AsioMutableBuffer(recv_buf, recv_chunk_size)));
+                                memcpy(write_ptr, recv_buf, r);
+                                write_ptr += r;
+                                received += r;
+                            }
+
+                            if (gu_unlikely(received != wsize))
                             {
                                 gu_throw_error(EPROTO)
                                     << "error reading write set data, "
                                     << "expected " << wsize
-                                    << " bytes, got " << r << " bytes";
+                                    << " bytes, got " << received << " bytes";
                             }
 
                             wbuf = ptr;

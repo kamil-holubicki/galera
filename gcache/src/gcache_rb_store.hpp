@@ -17,6 +17,10 @@
 
 #include <string>
 
+namespace gu {
+    class MasterKeyProvider;
+}
+
 namespace gcache
 {
     class RingBuffer : public MemOps
@@ -29,7 +33,11 @@ namespace gcache
                     seqno2ptr_t&       seqno2ptr,
                     gu::UUID&          gid,
                     int                dbg,
-                    bool               recover);
+                    bool               recover,
+                    bool               encrypt,
+                    size_t             encryptCachePageSize,
+                    size_t             encryptCacheSize,
+                    gu::MasterKeyProvider& masterKeyProvider);
 
         ~RingBuffer ();
 
@@ -167,8 +175,14 @@ namespace gcache
         static int    const DEBUG = 2; // debug flag
 
         ProgressCallback*  pcb_;
+        bool encrypt_;
+        int masterKeyId_;
+        gu::UUID masterKeyUuid_;
+        std::string fileKey_;
+        gu::MasterKeyProvider &masterKeyProvider_;
         gu::FileDescriptor fd_;
-        gu::MMap           mmap_;
+        std::shared_ptr<gu::IMMap>  mmapptr_;  // keep mmap_ member as the reference
+        gu::IMMap&         mmap_;
         char*        const preamble_; // ASCII text preamble
         int64_t*     const header_;   // cache binary header
         uint8_t*     const start_;    // start of cache area
@@ -204,9 +218,15 @@ namespace gcache
         static std::string const PR_KEY_SEQNO_MIN;
         static std::string const PR_KEY_OFFSET;
         static std::string const PR_KEY_SYNCED;
+        static std::string const PR_KEY_ENCRYPTION_VERSION;
+        static std::string const PR_KEY_ENCRYPTED;
+        static std::string const PR_KEY_MK_ID;
+        static std::string const PR_KEY_MK_UUID;
+        static std::string const PR_KEY_FILE_KEY;
+        static std::string const PR_KEY_ENC_CRC;
 
         void          write_preamble(bool synced);
-        void          open_preamble(bool recover);
+        void          open_preamble(bool const recover);
         void          close_preamble();
 
         // returns lower bound (not inclusive) of valid seqno range
@@ -214,6 +234,8 @@ namespace gcache
         void          recover(off_t offset, int version);
 
         void          estimate_space(bool zero_out = false);
+
+        bool          rotate_master_key();
 
         RingBuffer(const gcache::RingBuffer&);
         RingBuffer& operator=(const gcache::RingBuffer&);

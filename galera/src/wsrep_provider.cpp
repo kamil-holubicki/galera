@@ -160,6 +160,16 @@ wsrep_status_t galera_enc_set_key(wsrep_t* gh, const wsrep_enc_key_t*key)
 }
 
 extern "C"
+wsrep_status_t galera_rotate_gcache_key(wsrep_t* gh)
+{
+    assert(gh != 0);
+    assert(gh->ctx != 0);
+
+    REPL_CLASS * repl(reinterpret_cast< REPL_CLASS * >(gh->ctx));
+    return repl->rotate_gcache_key();
+}
+
+extern "C"
 wsrep_status_t galera_connect (wsrep_t*     gh,
                                const char*  cluster_name,
                                const char*  cluster_url,
@@ -1595,6 +1605,7 @@ static wsrep_t galera_str = {
     &galera_parameters_set,
     &galera_parameters_get,
     &galera_enc_set_key,
+    &galera_rotate_gcache_key,
     &galera_connect,
     &galera_disconnect,
     &galera_recv,

@@ -22,6 +22,10 @@
 #endif
 #include <stdint.h>
 
+namespace gu {
+    class MasterKeyProvider;
+}
+
 namespace gcache
 {
     class GCache
@@ -41,7 +45,8 @@ namespace gcache
          */
         GCache (ProgressCallback*  pcb,
                 gu::Config&        cfg,
-                const std::string& data_dir);
+                const std::string& data_dir,
+                gu::MasterKeyProvider& mk_provider);
 
         virtual ~GCache();
 
@@ -229,6 +234,9 @@ namespace gcache
 #ifdef PXC
             size_t keep_pages_count()    const { return keep_pages_count_;}
 #endif /* PXC */
+            bool   encrypt()             const { return encrypt_;         }
+            size_t encryption_cache_page_size() const { return encryption_cache_page_size_; }
+            size_t encryption_cache_size() const { return encryption_cache_size_; }
             int    debug()               const { return debug_;           }
             bool   recover()             const { return recover_;         }
 
@@ -265,6 +273,9 @@ namespace gcache
             size_t            keep_pages_count_;
             seqno_t           freeze_purge_at_seqno_;
 #endif /* PXC */
+            bool        const encrypt_;
+            size_t      const encryption_cache_page_size_;
+            size_t      const encryption_cache_size_;
         }
             params;
 

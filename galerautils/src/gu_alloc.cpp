@@ -10,10 +10,15 @@
 #include "gu_assert.hpp"
 #include "gu_arch.h"
 #include "gu_limits.h"
+#include "gu_enc_mmap_factory.hpp"
+#include "gu_config.hpp"
 
 #include <sstream>
 #include <iomanip> // for std::setfill() and std::setw()
 
+static bool g_encryptOffPages = false;
+static size_t g_encryptCachePageSize = 0;
+static size_t g_encryptCacheSize = 0;
 
 gu::Allocator::HeapPage::HeapPage (page_size_type const size) :
     Page (static_cast<byte_t*>(::malloc(size)), size)
@@ -60,12 +65,14 @@ gu::Allocator::FilePage::FilePage (const std::string& name,
 #else
     fd_  (name, size, false, false),
 #endif /* PXC */
-    mmap_(fd_, true)
+    mmapptr_   (MMapFactory::create(fd_, g_encryptOffPages,
+                g_encryptCachePageSize, std::min(g_encryptCacheSize, (size_t)size), false, 0)),
+    mmap_      (*mmapptr_)
 {
-    base_ptr_ = static_cast<byte_t*>(mmap_.ptr);
+    base_ptr_ = static_cast<byte_t*>(mmap_.get_ptr());
     assert(0 == (uintptr_t(base_ptr_) % GU_WORD_BYTES));
     ptr_      = base_ptr_;
-    left_     = mmap_.size;
+    left_     = mmap_.get_size();
 }
 
 
@@ -209,4 +216,26 @@ gu::Allocator::~Allocator ()
     {
         delete (pages_[i]);
     }
+}
+
+static const std::string ALLOCATOR_PARAMS_DISK_PAGES_ENCRYPTION("allocator.disk_pages_encryption");
+static const std::string ALLOCATOR_DEFAULT_DISK_PAGES_ENCRYPTION("no");
+static const std::string ALLOCATOR_PARAMS_ENCRYPTION_CACHE_PAGE_SIZE("allocator.encryption_cache_page_size");
+static const std::string ALLOCATOR_DEFAULT_ENCRYPTION_CACHE_PAGE_SIZE("32K");
+static const std::string ALLOCATOR_PARAMS_ENCRYPTION_CACHE_SIZE("allocator.encryption_cache_size");
+static const std::string ALLOCATOR_DEFAULT_ENCRYPTION_CACHE_SIZE("16777216");  // 512 x 32K
+
+void gu::Allocator::register_params(gu::Config& conf)
+{
+    conf.add(ALLOCATOR_PARAMS_DISK_PAGES_ENCRYPTION, ALLOCATOR_DEFAULT_DISK_PAGES_ENCRYPTION);
+    conf.add(ALLOCATOR_PARAMS_ENCRYPTION_CACHE_PAGE_SIZE, ALLOCATOR_DEFAULT_ENCRYPTION_CACHE_PAGE_SIZE);
+    conf.add(ALLOCATOR_PARAMS_ENCRYPTION_CACHE_SIZE, ALLOCATOR_DEFAULT_ENCRYPTION_CACHE_SIZE);
+}
+
+// We can do it this way as these parameters cannot be changed in runtime
+void gu::Allocator::configure_encryption(gu::Config& conf)
+{
+    g_encryptOffPages = conf.get<bool>(ALLOCATOR_PARAMS_DISK_PAGES_ENCRYPTION);
+    g_encryptCachePageSize = conf.get<size_t>(ALLOCATOR_PARAMS_ENCRYPTION_CACHE_PAGE_SIZE);
+    g_encryptCacheSize = conf.get<size_t>(ALLOCATOR_PARAMS_ENCRYPTION_CACHE_SIZE);
 }
