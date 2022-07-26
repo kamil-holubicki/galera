@@ -235,7 +235,29 @@ void gu::Allocator::register_params(gu::Config& conf)
 // We can do it this way as these parameters cannot be changed in runtime
 void gu::Allocator::configure_encryption(gu::Config& conf)
 {
+    static bool configured = false;
+
+    if (configured)
+    {
+        gu_throw_fatal << "Allocator does not allow reconfiguration. Already configured.";
+    }
+
     g_encryptOffPages = conf.get<bool>(ALLOCATOR_PARAMS_DISK_PAGES_ENCRYPTION);
     g_encryptCachePageSize = conf.get<size_t>(ALLOCATOR_PARAMS_ENCRYPTION_CACHE_PAGE_SIZE);
     g_encryptCacheSize = conf.get<size_t>(ALLOCATOR_PARAMS_ENCRYPTION_CACHE_SIZE);
+    configured = true;
+}
+
+void gu::Allocator::param_set (const std::string& key, const std::string& value)
+{
+    if (key == ALLOCATOR_PARAMS_DISK_PAGES_ENCRYPTION ||
+        key == ALLOCATOR_PARAMS_ENCRYPTION_CACHE_PAGE_SIZE ||
+        key == ALLOCATOR_PARAMS_ENCRYPTION_CACHE_SIZE)
+    {
+        gu_throw_error(EPERM) << "Can't change allocator parameters in runtime.";
+    }
+    else
+    {
+        throw gu::NotFound();
+    }
 }

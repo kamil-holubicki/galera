@@ -260,6 +260,12 @@ galera::ReplicatorSMM::param_set (const std::string& key,
         }
         catch (gu::NotFound&) {}
 #endif
+        try
+        {
+            gu::Allocator::param_set (key, value);
+            found = true;
+        }
+        catch (gu::NotFound&) {}
     }
 
     if (!found) throw gu::NotFound();

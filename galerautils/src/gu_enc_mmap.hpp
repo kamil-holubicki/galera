@@ -1,3 +1,20 @@
+/* Copyright (c) 2022 Percona LLC and/or its affiliates. All rights
+   reserved.
+
+   This program is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public License
+   as published by the Free Software Foundation; version 2 of
+   the License.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
+
 #ifndef __GCACHE_MMAPENC__
 #define __GCACHE_MMAPENC__
 
@@ -47,11 +64,13 @@ public:
     bool lock();
     void unlock();
 
-    static void dump_mappings();
 private:
     void encrypt(unsigned char* dst, unsigned char* src, size_t size, size_t pageNumber) const;
     void decrypt(unsigned char* dst, unsigned char* src, size_t size, size_t pageNumber) const;
-    void dump_mappings_int();
+
+    friend class EncMMapsRepository;
+    void dump_mappings();
+
     std::shared_ptr<MMap> mmapraw_;
     size_t pageSize_;
     unsigned char* mmaprawPtr_;
@@ -76,6 +95,9 @@ private:
     mutable Aes_ctr_decryptor decryptor_;
     bool syncOnDestroy_;
 
+    inline bool is_last_page(size_t page) const {
+        return page == pagesCnt_-1;
+    }
     unsigned char* page_start(unsigned long long pageNo) const;
     unsigned char* page_start(unsigned char* addr) const;
     size_t page_number(unsigned char* addr) const;

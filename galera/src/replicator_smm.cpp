@@ -3820,7 +3820,7 @@ galera::ReplicatorSMM::abort()
 std::string
 galera::ReplicatorSMM::get_encryption_key(const std::string& keyId)
 {
-    static size_t KEY_LENGTH = 32;
+    static size_t const KEY_LENGTH = 32;
     unsigned char buf[KEY_LENGTH];
     wsrep_enc_key_t key;
     key.ptr = buf;

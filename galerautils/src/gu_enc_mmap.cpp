@@ -1,3 +1,20 @@
+/* Copyright (c) 2022 Percona LLC and/or its affiliates. All rights
+   reserved.
+
+   This program is free software; you can redistribute it and/or
+   modify it under the terms of the GNU General Public License
+   as published by the Free Software Foundation; version 2 of
+   the License.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program; if not, write to the Free Software
+   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA */
+
 #include "gu_enc_mmap.hpp"
 #include "gu_throw.hpp"
 #include "gu_logger.hpp"
@@ -14,11 +31,10 @@
 #include <cassert>
 #include <thread>
 #include <set>
+#include <utility>
 
 
 namespace gu {
-
-#define IS_LAST_PAGE(_page) (_page == pagesCnt_-1)
 
 #define REAL_ENCRYPTION 1
 
@@ -27,23 +43,47 @@ static const size_t MANAGERS_POOL_SIZE = 10;
 PMemoryManagerPool memoryManagerPool(MANAGERS_POOL_SIZE);
 
 // EncMMap objects repository
-static std::atomic_flag encMmapsLock = ATOMIC_FLAG_INIT;
+class EncMMapsRepository {
+public:
+    static void AddEncMMap(EncMMap *mmap, unsigned char* ptr, size_t size);
+    static void DelEncMMap(EncMMap *mmap);
+    static bool TryGetEncMMap(unsigned char* ptr, EncMMap** mmap);
 
-struct EncMMapDescriptor {
-    unsigned char*   start_;
-    unsigned char*   end_;
+    static void DumpMappings();
+
+    EncMMapsRepository() = delete;
+    EncMMapsRepository(const EncMMapsRepository&) = delete;
+    EncMMapsRepository& operator=(const EncMMapsRepository&) = delete;
+
+private:
+    struct EncMMapDescriptor {
+        EncMMapDescriptor(unsigned char* start, unsigned char* end)
+        : start_(start)
+        , end_ (end)
+        {}
+
+        unsigned char*   start_;
+        unsigned char*   end_;
+    };
+
+    static std::atomic_flag encMmapsLock;
+    static std::map<EncMMap*, EncMMapDescriptor> encMMaps;
 };
-std::map<EncMMap*, EncMMapDescriptor> encMMaps;
 
-static void addEncMMap(EncMMap *mmap, unsigned char* ptr, size_t size) {
+std::atomic_flag EncMMapsRepository::encMmapsLock = ATOMIC_FLAG_INIT;
+std::map<EncMMap*, EncMMapsRepository::EncMMapDescriptor> EncMMapsRepository::encMMaps;
+
+void EncMMapsRepository::AddEncMMap(EncMMap *mmap, unsigned char* ptr, size_t size) {
     while (encMmapsLock.test_and_set(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
-    encMMaps[mmap] = {ptr, ptr+size};
+
+    encMMaps.emplace(std::piecewise_construct, std::forward_as_tuple(mmap),
+      std::forward_as_tuple(ptr, ptr+size));
     encMmapsLock.clear(std::memory_order_release);
 }
 
-static void delEncMMap(EncMMap *mmap) {
+void EncMMapsRepository::DelEncMMap(EncMMap *mmap) {
     while (encMmapsLock.test_and_set(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
@@ -51,34 +91,51 @@ static void delEncMMap(EncMMap *mmap) {
     encMmapsLock.clear(std::memory_order_release);
 }
 
-static EncMMap* getEncMMap(unsigned char* ptr) {
+bool EncMMapsRepository::TryGetEncMMap(unsigned char* ptr, EncMMap** mmap) {
+    // If someone is accessing encMMaps, just bail out without even trying
+    // to find requested object.
+    // It can happen in the following situations:
+    // 1. (rare) The client in registering/deregistering new EncMMap object
+    // 2. (more probable but still not so often) Two signal handlers are called
+    //    simultaneously (2 threads). In such a case the 2nd one will retry
+    //    in a while.
+    *mmap = nullptr;
+    if (encMmapsLock.test_and_set(std::memory_order_acquire)) {
+        return true;
+    }
+
     for (auto m : encMMaps) {
         if (ptr >= m.second.start_  &&  ptr < m.second.end_) {
-            return m.first;
+            *mmap = m.first;
+            break;
         }
     }
-    return nullptr;
+
+    encMmapsLock.clear(std::memory_order_release);
+    return false;
 }
 
-
 // Debug purpose only
-void EncMMap::dump_mappings() {
+void EncMMapsRepository::DumpMappings() {
     while (encMmapsLock.test_and_set(std::memory_order_acquire)) {
         std::this_thread::yield();
     }
 
-        for (auto mm : encMMaps) {
-            S_DEBUG_A("Mappings for EncMMap x%llX (x%llX - x%llX) START\n",
-              ptr2ull(mm.first), ptr2ull(mm.second.start_), ptr2ull(mm.second.end_));
-            mm.first->dump_mappings_int();
-        }
+    for (auto mm : encMMaps) {
+        S_DEBUG_A("Mappings for EncMMap x%llX (x%llX - x%llX) START\n",
+            ptr2ull(mm.first), ptr2ull(mm.second.start_), ptr2ull(mm.second.end_));
+        mm.first->dump_mappings();
+    }
+
     encMmapsLock.clear(std::memory_order_release);
 }
+
 void dump_mappings() {
-    EncMMap::dump_mappings();
+    EncMMapsRepository::DumpMappings();
 }
 
-void EncMMap::dump_mappings_int()
+
+void EncMMap::dump_mappings()
 {
     S_DEBUG("vpage -> ppage mappings start\n");
     for (auto kv : vpage2ppage_) {
@@ -109,7 +166,7 @@ size_t EncMMap::page_number(unsigned char* addr) const {
 // encrption / decryption
 void EncMMap::encrypt(unsigned char* dst, unsigned char* src, size_t size, size_t pageNumber) const {
     // the last page may be not full
-    size = IS_LAST_PAGE(pageNumber) ? lastPageSize_ : size;
+    size = is_last_page(pageNumber) ? lastPageSize_ : size;
 #if REAL_ENCRYPTION
     size_t pageStartOffset = pageNumber * pageSize_;
     size_t unencryptedSize = 0;
@@ -133,7 +190,7 @@ void EncMMap::encrypt(unsigned char* dst, unsigned char* src, size_t size, size_
 
 void EncMMap::decrypt(unsigned char* dst, unsigned char* src, size_t size, size_t pageNumber) const {
     // the last page may be not full
-    size = IS_LAST_PAGE(pageNumber) ? lastPageSize_ : size;
+    size = is_last_page(pageNumber) ? lastPageSize_ : size;
 #if REAL_ENCRYPTION
     size_t pageStartOffset = pageNumber * pageSize_;
     size_t unencryptedSize = 0;
@@ -161,21 +218,14 @@ static std::once_flag signal_handler_once;
 static struct sigaction oldsigact;
 
 void signal_handler(int sig, siginfo_t* info, void* ctx) {
-    // If someone is accessing encMMaps, just bail out without even trying
-    // to find our object.
-    // It can happen in the following situations:
-    // 1. (rare) The client in registering/deregistering new EncMMap object
-    // 2. (more probable but still not so often) Two signal handlers are called
-    //    simultaneously (2 threads). In such a case the 2nd one will retry
-    //    in a while.
-    if (encMmapsLock.test_and_set(std::memory_order_acquire)) {
+    unsigned char *addr = static_cast<unsigned char*>(info->si_addr);
+    S_DEBUG("addr: x%llX\n", ptr2ull(addr));
+
+    EncMMap* encmmap;
+    if (EncMMapsRepository::TryGetEncMMap(addr, &encmmap)) {
         S_DEBUG("signal_handler collision\n");
         return;
     }
-    unsigned char *addr = static_cast<unsigned char*>(info->si_addr);
-    S_DEBUG("addr: x%llX\n", ptr2ull(addr));
-    EncMMap*  encmmap = getEncMMap(addr);
-    encMmapsLock.clear(std::memory_order_release);
 
     if (encmmap == nullptr) {
         S_DEBUG_A("calling old signal handler\n");
@@ -188,12 +238,7 @@ void signal_handler(int sig, siginfo_t* info, void* ctx) {
     }
 
     // This is our region. Dispatch to the proper EncMMap object.
-    if (!encmmap->lock()) {
-        S_DEBUG("encmmap collision\n");
-        return;
-    }
     encmmap->handle_signal(info);
-    encmmap->unlock();
 }
 
 static void install_signal_handler() {
@@ -259,7 +304,7 @@ EncMMap::EncMMap(const std::string& key, std::shared_ptr<MMap> rawmmap,
     S_DEBUG_A("EncMMap::EncMMap() allocated pages cnt: %ld\n", pagesCnt_);
     vpage2protectionGuard_ = std::shared_ptr<int>(new int[pagesCnt_], [](int *p) { delete[] p; });
     vpage2protection_ = vpage2protectionGuard_.get();
-    addEncMMap(this, base_, vMemSize_);
+    EncMMapsRepository::AddEncMMap(this, base_, vMemSize_);
 
     // we set up vpage2protection_ map inside
     set_key(key);
@@ -273,7 +318,7 @@ EncMMap::~EncMMap() {
         try { unmap(); } catch (Exception& e) { log_error << e.what(); }
     }
 
-    delEncMMap(this);
+    EncMMapsRepository::DelEncMMap(this);
 
     encryptor_.close();
     decryptor_.close();
@@ -322,7 +367,7 @@ void EncMMap::mprotectd(unsigned char *ptr, size_t size, int prot) const {
 
 // todo: maybe use PageGluer here as well?
 void EncMMap::sync(void *addr, size_t length) const {
-    unsigned char* addrU = reinterpret_cast<unsigned char*>(addr);
+    unsigned char* addrU = static_cast<unsigned char*>(addr);
 
     S_DEBUG("sync() addr: %llX, length: %ld\n", ptr2ull(addr), length);
 
@@ -332,7 +377,7 @@ void EncMMap::sync(void *addr, size_t length) const {
 
     // calculate the real lenght to sync. It is pages bound
     unsigned char* syncAddrStart = page_start(firstPageToSync);
-    size_t lastPageSize = IS_LAST_PAGE(lastPageToSync) ? lastPageSize_ : pageSize_;
+    size_t lastPageSize = is_last_page(lastPageToSync) ? lastPageSize_ : pageSize_;
     unsigned char* syncAddrEnd = page_start(lastPageToSync) + lastPageSize;
     size_t realSyncLen = syncAddrEnd - syncAddrStart;
     size_t syncStartOffset = base_ - addrU;
@@ -358,7 +403,7 @@ void EncMMap::sync(void *addr, size_t length) const {
             mprotectd(vpageStart, pageSize_, defaultPageProtection_);
         }
     }
-    // sync the underlaying file
+    // sync the underlying file
     // we need to sync whole alloc pages
     mmapraw_->sync(mmaprawPtr_+syncStartOffset, realSyncLen);
  }
@@ -379,7 +424,7 @@ void EncMMap::sync() const {
             mprotectd(vpageStart, pageSize_, defaultPageProtection_);
         }
     }
-    // sync the underlaying file
+    // sync the underlying file
     mmapraw_->sync();
 }
 
@@ -471,6 +516,11 @@ struct PageGluer {
 
 // signal handler. The whole magic happens here
 void EncMMap::handle_signal(siginfo_t* info) {
+    if (!lock()) {
+        S_DEBUG("encmmap collision\n");
+        return;
+    }
+
     S_DEBUG("handle_signal >>>>>>>>>>>\n");
     unsigned char* p = static_cast<unsigned char*>(info->si_addr);
     size_t reqPageNo = page_number(p);
@@ -510,7 +560,7 @@ void EncMMap::handle_signal(siginfo_t* info) {
                     unsigned char* dstPtr = mmaprawPtr_ + pageNo*pageSize_;
                     mprotectd(vpageStart, pageSize_, PROT_READ);
 
-                    size_t pageSize = IS_LAST_PAGE(pageNo) ? lastPageSize_ : pageSize_;
+                    size_t pageSize = is_last_page(pageNo) ? lastPageSize_ : pageSize_;
                     if (gluer.glue(pageNo, vpageStart, dstPtr, pageSize)) {
                         S_DEBUG("glued\n");
                         // Marking the page as not mapped should logically 
@@ -622,6 +672,7 @@ void EncMMap::handle_signal(siginfo_t* info) {
         S_DEBUG("reqPageNo: %d PROT_READ -> PROT_READ | PROT_WRITE\n", reqPageNo);
     }
     S_DEBUG("handle_signal <<<<<<<<<\n");
+    unlock();
 }
 
 

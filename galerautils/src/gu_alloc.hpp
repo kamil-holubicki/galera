@@ -72,6 +72,7 @@ public:
 
     static void register_params(gu::Config& conf);
     static void configure_encryption(gu::Config& conf);
+    static void param_set (const std::string& key, const std::string& value);
 
 private:
 

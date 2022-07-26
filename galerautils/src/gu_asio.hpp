@@ -485,7 +485,7 @@ namespace gu
                 // avoid allocating huge buffers, so send it in chunks
                 static const ssize_t send_buf_size = 32* 1024;
                 unsigned char send_buf[send_buf_size];
-                const unsigned char* src_ptr = reinterpret_cast<const unsigned char*>(b->data());
+                const unsigned char* src_ptr = static_cast<const unsigned char*>(b->data());
                 ssize_t to_send = b->size();
 
                 while (to_send > 0) {

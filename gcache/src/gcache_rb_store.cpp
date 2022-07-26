@@ -135,7 +135,7 @@ namespace gcache
 
     RingBuffer::~RingBuffer ()
     {
-        masterKeyProvider_.RegisterKeyRotationRequestObserver([](){ return false; });
+        masterKeyProvider_.RegisterKeyRotationRequestObserver([](){ return true; });
         close_preamble();
         open_ = false;
         mmap_.sync();
@@ -792,7 +792,7 @@ namespace gcache
         }
 
         if (encrypt_) {
-            /* Q: Why we store master key in gcache.preamble instead of
+            /* Q: Why do we store master key ID in gcache.preamble instead of
                doing the whole key management (e.g rotation) on server side
                and only informing Galera about the new key?
                A: We need access to the master key when Galera is initialized

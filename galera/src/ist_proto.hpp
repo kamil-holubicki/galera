@@ -671,7 +671,7 @@ namespace galera
                             // avoid allocating huge buffers, so receive it in chunks
                             static const ssize_t recv_buf_size = 32* 1024;
                             unsigned char recv_buf[recv_buf_size];
-                            unsigned char* write_ptr = reinterpret_cast<unsigned char*>(ptr);
+                            unsigned char* write_ptr = static_cast<unsigned char*>(ptr);
                             ssize_t received = 0;
 
                             while (received < wsize) {
