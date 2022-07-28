@@ -22,16 +22,24 @@
 
 namespace gu {
 
+enum DebugLevel {
+   NOTE,
+   WARNING,
+   ERROR
+};
+
 #if 0
-#define S_DEBUG(format, ...) swrite(format, ##__VA_ARGS__)
+#define S_DEBUG_N(format, ...) swrite(NOTE, format, ##__VA_ARGS__)
 #else
-#define S_DEBUG(...)
+#define S_DEBUG_N(...)
 #endif
 // always
-#define S_DEBUG_A(format, ...) swrite(format, ##__VA_ARGS__)
+#define S_DEBUG_A(format, ...) swrite(NOTE, format, ##__VA_ARGS__)
+#define S_DEBUG_W(format, ...) swrite(WARNING, format, ##__VA_ARGS__)
+#define S_DEBUG_E(format, ...) swrite(ERROR, format, ##__VA_ARGS__)
 
 
-void swrite(const char* format, ...);
+void swrite(DebugLevel level, const char* format, ...);
 void dumpMemory(void *ptr, size_t size);
 
 }  // namespace

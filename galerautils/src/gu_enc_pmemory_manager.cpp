@@ -50,12 +50,12 @@ PMemoryManager::PMemoryManager(size_t size, size_t allocPageSize)
 , mapped_(false)
 , allocPagesCnt_(0)
 , allocPageSize_(allocPageSize) {
-    S_DEBUG_A("+++PMemoryManager::PMemoryManager() size: %ld, allocPageSize: %ld\n",
+    S_DEBUG_N("+++PMemoryManager::PMemoryManager() size: %ld, allocPageSize: %ld\n",
       size, allocPageSize);
 
     // allocPageSize has to be CPU page aligned
     if (allocPageSize_ % getCpuPageSize() || allocPageSize_ < getCpuPageSize()) {
-        S_DEBUG_A("PMemoryManager::PMemoryManager() allocPageSize not aligned. Requested: %ld. "
+        S_DEBUG_E("PMemoryManager::PMemoryManager() allocPageSize not aligned. Requested: %ld. "
                   "Should be multiply of CPU page size %ld\n", allocPageSize, getCpuPageSize());
         gu_throw_error(errno) << "PMemoryManager::PMemoryManager() allocPageSize not aligned";
     }
@@ -63,7 +63,7 @@ PMemoryManager::PMemoryManager(size_t size, size_t allocPageSize)
     // how many pages do we need to satisfy size?
     allocPagesCnt_ = size / allocPageSize_;
     if (size % allocPageSize_) {
-        S_DEBUG_A("PMemoryManager::PMemoryManager() adding page, size %ld is not aligned to allocation unit\n", size);
+        S_DEBUG_N("PMemoryManager::PMemoryManager() adding page, size %ld is not aligned to allocation unit\n", size);
         allocPagesCnt_++;
     }
     allocPagesCnt_ = allocPagesCnt_ < CACHE_ALLOC_PAGES_MAX ? allocPagesCnt_ : CACHE_ALLOC_PAGES_MAX;
@@ -79,13 +79,13 @@ PMemoryManager::PMemoryManager(size_t size, size_t allocPageSize)
         gu_throw_error(errno) << "PMemoryManager::PMemoryManager() mmap() failed";
     }
     if (mlock(base_, size_)) {
-        S_DEBUG("PMemoryManager::PMemoryManager() mlock failed. It will still work, "
+        S_DEBUG_W("PMemoryManager::PMemoryManager() mlock failed. It will still work, "
                    "but swap pages into the disk, so performance will be affected\n");
     }
 #if CLEAR_BUFFERS
     memset(base_, FREE_PAGE_PATTERN, size_);
 #endif
-    S_DEBUG_A("PMemoryManager::PMemoryManager() (x%llX - x%llX). "
+    S_DEBUG_N("PMemoryManager::PMemoryManager() (x%llX - x%llX). "
               "CpuPageSize: %ld, allocPageSize: %ld, allocPagesCnt: %ld, "
               "size requested: %ld, size allocated: %ld\n",
       ptr2ull(base_), ptr2ull(base_) + size_,
@@ -99,24 +99,24 @@ PMemoryManager::PMemoryManager(size_t size, size_t allocPageSize)
         myPages_.push_back(page);
     }
     freePages_ = myPages_;
-    S_DEBUG("---PMemoryManager::PMemoryManager()\n");
+    S_DEBUG_N("---PMemoryManager::PMemoryManager()\n");
 }
 
 PMemoryManager::~PMemoryManager() {
-    S_DEBUG_A("+++PMemoryManager::~PMemoryManager() (x%llX - x%llX)\n",
+    S_DEBUG_N("+++PMemoryManager::~PMemoryManager() (x%llX - x%llX)\n",
       ptr2ull(base_), ptr2ull(base_) + size_);
 
     if (freePages_.size() != allocPagesCnt_) {
-        S_DEBUG_A("Some pages still allocated. Free pages cnt: %d\n", freePages_.size());
+        S_DEBUG_W("Some pages still allocated. Free pages cnt: %d\n", freePages_.size());
     }
 
     if (mapped_) {
         if (munmap (base_, size_) < 0) {
-            S_DEBUG("unmap failed");
+            S_DEBUG_E("unmap failed");
         }
     }
     mapped_ = false;
-    S_DEBUG_A("---PMemoryManager::~PMemoryManager() (x%llX - x%llX)\n",
+    S_DEBUG_N("---PMemoryManager::~PMemoryManager() (x%llX - x%llX)\n",
       ptr2ull(base_), ptr2ull(base_) + size_);
 }
 
@@ -128,9 +128,9 @@ void PMemoryManager::GetCreateParams(size_t* size, size_t* allocPageSize) {
 
 std::shared_ptr<PPage> PMemoryManager::alloc() {
     // no free pages. Need to free some pages before allocating.
-    S_DEBUG("PMemoryManager::alloc() freePages: %d\n", freePages_.size());
+    S_DEBUG_N("PMemoryManager::alloc() freePages: %d\n", freePages_.size());
     if (freePages_.empty()) {
-        S_DEBUG("PMemoryManager::alloc() no free pages\n");
+        S_DEBUG_N("PMemoryManager::alloc() no free pages\n");
         return std::shared_ptr<PPage>();
     }
     auto p = freePages_.back();
@@ -139,7 +139,7 @@ std::shared_ptr<PPage> PMemoryManager::alloc() {
 #if CLEAR_BUFFERS
     for(size_t i = 0; i < allocPageSize_; ++i){
         if ((unsigned char)(p->ptr_[i]) != FREE_PAGE_PATTERN) {
-            S_DEBUG("Free page pattern does not mach\n");
+            S_DEBUG_E("Free page pattern does not mach\n");
             assert(0);
         }
     }
@@ -178,11 +178,11 @@ bool PMemoryManager::createTmpFile()
         return true;
     }
     if (fcntl(fd, F_SETFD, flags|FD_CLOEXEC) == -1) {
-        return -1;
+        return true;
     }
 
     if (posix_fallocate(fd, 0, size_)) {
-        S_DEBUG("posix_fallocate failed\n");
+        S_DEBUG_E("posix_fallocate failed\n");
         return true;
     }
     fd_ = fd;

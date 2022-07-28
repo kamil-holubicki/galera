@@ -49,7 +49,7 @@ std::shared_ptr<PMemoryManager> PMemoryManagerPool::allocate(size_t allocPageSiz
     std::lock_guard<std::mutex> l(mtx_);
     std::shared_ptr<PMemoryManager> result;
 
-    S_DEBUG("PMemoryManagerPool::allocate(). size: %ld, pageSize: %ld, Pool size: %ld/%ld\n",
+    S_DEBUG_N("PMemoryManagerPool::allocate(). size: %ld, pageSize: %ld, Pool size: %ld/%ld\n",
       size, allocPageSize, poolSize_, poolSizeMax_);
     timestampServer++;
     bool doErase = (timestampServer % ERASE_TRIGGER == 0);
@@ -61,7 +61,7 @@ std::shared_ptr<PMemoryManager> PMemoryManagerPool::allocate(size_t allocPageSiz
             ++iter;
             managers_.erase(eraseIter);
             poolSize_--;
-            S_DEBUG("Reusing PMemoryManager\n");
+            S_DEBUG_N("Reusing PMemoryManager\n");
         }
         if(result && !doErase) {
             break;
@@ -74,7 +74,7 @@ std::shared_ptr<PMemoryManager> PMemoryManagerPool::allocate(size_t allocPageSiz
 
         if (iter->timestamp_ + AGE_THREASHOLD < timestampServer ||
             iter->timestamp_ > timestampServer) {
-            S_DEBUG("PMemoryManagerPool::allocate(). Removing obsolete manager."
+            S_DEBUG_N("PMemoryManagerPool::allocate(). Removing obsolete manager."
                      " Manager timestamp: %llu, current timestamp: %llu"
                      " Manager size: %ld\n", iter->timestamp_, timestampServer, iter->mgrSize_);
             auto eraseIter = iter;
@@ -85,7 +85,7 @@ std::shared_ptr<PMemoryManager> PMemoryManagerPool::allocate(size_t allocPageSiz
         }
     }
     if (!result) {
-        S_DEBUG("Creating new PMemoryManager\n");
+        S_DEBUG_N("Creating new PMemoryManager\n");
         result = std::make_shared<PMemoryManager>(size, allocPageSize);
     }
     return result;
@@ -96,9 +96,9 @@ void PMemoryManagerPool::free(std::shared_ptr<PMemoryManager>mgr) {
     if (poolSize_ < poolSizeMax_) {
         managers_.emplace(timestampServer, mgr);
         poolSize_++;
-        S_DEBUG("PMemoryManager returned to pool. Pool size: %ld/%ld\n", poolSize_, poolSizeMax_);
+        S_DEBUG_N("PMemoryManager returned to pool. Pool size: %ld/%ld\n", poolSize_, poolSizeMax_);
     } else {
-        S_DEBUG("PMemoryManager freed, but not to the pool. Pool size: %ld/%ld\n", poolSize_, poolSizeMax_);
+        S_DEBUG_N("PMemoryManager freed, but not to the pool. Pool size: %ld/%ld\n", poolSize_, poolSizeMax_);
     }
 }
 }
