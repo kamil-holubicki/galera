@@ -82,14 +82,14 @@ namespace gcache
                             bool               encrypt,
                             size_t             encryptCachePageSize,
                             size_t             encryptCacheSize,
-                            gu::MasterKeyProvider& masterKeyProvider)
+                            gu::MasterKeyProvider* masterKeyProvider)
     :
         pcb_       (pcb),
-        encrypt_   (encrypt),
         masterKeyId_(0),
         masterKeyUuid_(),
         fileKey_(),
         masterKeyProvider_(masterKeyProvider),
+        encrypt_   (encrypt && masterKeyProvider_ != nullptr),  // protects access to masterKeyProvider_ ptr as well
 #ifdef PXC
 #ifdef HAVE_PSI_INTERFACE
         fd_        (name, WSREP_PFS_INSTR_TAG_RINGBUFFER_FILE, check_size(size)),
@@ -125,17 +125,21 @@ namespace gcache
     {
         assert((uintptr_t(start_) % MemOps::ALIGNMENT) == 0);
         constructor_common ();
-        masterKeyProvider_.RegisterKeyRotationRequestObserver(
-            [this]() {
-               return rotate_master_key(); 
-            });
+        if (encrypt_) {
+            masterKeyProvider_->RegisterKeyRotationRequestObserver(
+                [this]() {
+                return rotate_master_key(); 
+                });
+        }
         open_preamble(recover);
         BH_clear (BH_cast(next_));
     }
 
     RingBuffer::~RingBuffer ()
     {
-        masterKeyProvider_.RegisterKeyRotationRequestObserver([](){ return true; });
+        if (encrypt_) {
+            masterKeyProvider_->RegisterKeyRotationRequestObserver([](){ return true; });
+        }
         close_preamble();
         open_ = false;
         mmap_.sync();
@@ -627,11 +631,8 @@ namespace gcache
     bool
     RingBuffer::rotate_master_key()
     {
-        if (!encrypt_)
-          return true;
-
         std::string oldMKName = gu::CreateMasterKeyName(masterKeyUuid_, masterKeyId_);
-        std::string oldMK = masterKeyProvider_.GetKey(oldMKName);
+        std::string oldMK = masterKeyProvider_->GetKey(oldMKName);
         if (oldMK.length() == 0) return true;
 
         // decrypt fileKey_ with the old MK
@@ -639,8 +640,8 @@ namespace gcache
 
         masterKeyId_++;
         std::string newMKName = gu::CreateMasterKeyName(masterKeyUuid_, masterKeyId_);
-        if(masterKeyProvider_.CreateKey(newMKName)) return true;
-        std::string newMK = masterKeyProvider_.GetKey(newMKName);
+        if(masterKeyProvider_->CreateKey(newMKName)) return true;
+        std::string newMK = masterKeyProvider_->GetKey(newMKName);
         if (newMK.length() == 0) return true;
 
         // encrypt with new MK
@@ -839,7 +840,7 @@ namespace gcache
                     masterKeyId_ = 1;
 
                     mkName = gu::CreateMasterKeyName(masterKeyUuid_, masterKeyId_);
-                    masterKeyProvider_.CreateKey(mkName);
+                    masterKeyProvider_->CreateKey(mkName);
 
                     // This is new key. Do not allow retry.
                     allowRetry = false;
@@ -848,7 +849,7 @@ namespace gcache
                 }
 
                 // 1. Get MK from encryption context
-                mk = masterKeyProvider_.GetKey(mkName);
+                mk = masterKeyProvider_->GetKey(mkName);
                 if (mk.length() != 0) break;
 
                 // MK not found. Generate the new one, but try only once.

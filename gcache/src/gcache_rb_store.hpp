@@ -34,10 +34,10 @@ namespace gcache
                     gu::UUID&          gid,
                     int                dbg,
                     bool               recover,
-                    bool               encrypt,
-                    size_t             encryptCachePageSize,
-                    size_t             encryptCacheSize,
-                    gu::MasterKeyProvider& masterKeyProvider);
+                    bool               encrypt = false,
+                    size_t             encryptCachePageSize = 0,
+                    size_t             encryptCacheSize = 0,
+                    gu::MasterKeyProvider* masterKeyProvider = nullptr);
 
         ~RingBuffer ();
 
@@ -175,11 +175,11 @@ namespace gcache
         static int    const DEBUG = 2; // debug flag
 
         ProgressCallback*  pcb_;
-        bool encrypt_;
         int masterKeyId_;
         gu::UUID masterKeyUuid_;
         std::string fileKey_;
-        gu::MasterKeyProvider &masterKeyProvider_;
+        gu::MasterKeyProvider *masterKeyProvider_;
+        bool encrypt_;
         gu::FileDescriptor fd_;
         std::shared_ptr<gu::IMMap>  mmapptr_;  // keep mmap_ member as the reference
         gu::IMMap&         mmap_;

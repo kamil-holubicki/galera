@@ -46,7 +46,7 @@ namespace gcache
         GCache (ProgressCallback*  pcb,
                 gu::Config&        cfg,
                 const std::string& data_dir,
-                gu::MasterKeyProvider& mk_provider);
+                gu::MasterKeyProvider* mk_provider = nullptr);
 
         virtual ~GCache();
 

@@ -535,6 +535,13 @@ static void test_ist_common(int const version)
     using galera::TrxHandle;
     using galera::KeyOS;
 
+    // Initialize utils. Ring buffer needs CRC.
+    // It is done by replicator constructor, but we use GCache directly here.
+    gu_init(nullptr, [](wsrep_pfs_instr_type_t,
+                        wsrep_pfs_instr_ops_t,
+                        wsrep_pfs_instr_tag_t, void **,
+                        void **, const void *) {});             
+
     TrxHandleMaster::Pool lp(TrxHandleMaster::LOCAL_STORAGE_SIZE(), 4,
                              "ist_common");
     TrxHandleSlave::Pool sp(sizeof(TrxHandleSlave), 4, "ist_common");

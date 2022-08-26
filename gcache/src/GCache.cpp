@@ -40,7 +40,7 @@ namespace gcache
 
     GCache::GCache (ProgressCallback* pcb,
                     gu::Config& cfg, const std::string& data_dir,
-                    gu::MasterKeyProvider& mk_provider)
+                    gu::MasterKeyProvider* mk_provider)
         :
         config    (cfg),
         params    (config, data_dir),
@@ -113,11 +113,11 @@ namespace gcache
 
 #include "gcache.h"
 
-gcache_t* gcache_create (gu_config_t* conf, const char* data_dir, gu::MasterKeyProvider& mk_provider)
+gcache_t* gcache_create (gu_config_t* conf, const char* data_dir)
 {
     /* this funciton is used only in tests */
     gcache::GCache* gc = new gcache::GCache (
-        NULL, *reinterpret_cast<gu::Config*>(conf), data_dir, mk_provider);
+        NULL, *reinterpret_cast<gu::Config*>(conf), data_dir);
     return reinterpret_cast<gcache_t*>(gc);
 }
 

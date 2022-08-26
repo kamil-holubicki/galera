@@ -3,6 +3,7 @@
  */
 
 #include "gcs_test_utils.hpp"
+#include <gu_init.h>
 
 namespace gcs_test
 {
@@ -10,6 +11,13 @@ namespace gcs_test
 void
 InitConfig::common_ctor(gu::Config& cfg)
 {
+    // Initialize utils. Ring buffer needs CRC.
+    // It is done by replicator constructor, but we use RB directly here.
+    gu_init(nullptr, [](wsrep_pfs_instr_type_t,
+                        wsrep_pfs_instr_ops_t,
+                        wsrep_pfs_instr_tag_t, void **,
+                        void **, const void *) {});             
+
     gcache::GCache::register_params(cfg);
     gcs_register_params(reinterpret_cast<gu_config_t*>(&cfg));
 }

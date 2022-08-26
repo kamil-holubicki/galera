@@ -25,9 +25,9 @@ namespace gcache
                    size_t             page_size,
                    int                dbg,
                    size_t             keep_page,
-                   bool               encrypt,
-                   size_t             encryptCachePageSize,
-                   size_t             encryptCacheSize);
+                   bool               encrypt = false,
+                   size_t             encryptCachePageSize = 0,
+                   size_t             encryptCacheSize = 0);
 
         ~PageStore ();
 

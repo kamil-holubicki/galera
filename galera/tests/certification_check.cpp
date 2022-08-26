@@ -9,6 +9,7 @@
 #include "GCache.hpp"
 #include "gu_config.hpp"
 #include "gu_inttypes.hpp"
+#include "gu_init.h"
 
 #include <check.h>
 
@@ -45,6 +46,10 @@ namespace
             {
                 conf.set("gcache.name", GCACHE_NAME);
                 conf.set("gcache.size", "1M");
+                gu_init(nullptr, [](wsrep_pfs_instr_type_t,
+                                    wsrep_pfs_instr_ops_t,
+                                    wsrep_pfs_instr_tag_t, void **,
+                                    void **, const void *) {});             
             }
         }                                 init_;
         galera::ProgressCallback<int64_t> gcache_pcb_;

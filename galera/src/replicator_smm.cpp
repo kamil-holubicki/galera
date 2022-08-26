@@ -146,7 +146,7 @@ galera::ReplicatorSMM::ReplicatorSMM(const struct wsrep_init_args* args)
     master_key_provider_([this](const std::string& keyId){ return get_encryption_key(keyId); },
                          [this](const std::string& keyId){ return new_encryption_key(keyId); }),
     gcache_             (&gcache_progress_cb_, config_, config_.get(BASE_DIR),
-                         master_key_provider_),
+                         &master_key_provider_),
     joined_progress_cb_ (ProgressCallback<gcs_seqno_t>(WSREP_MEMBER_JOINED,
                                                        WSREP_MEMBER_SYNCED)),
     gcs_                (config_, gcache_, &joined_progress_cb_,

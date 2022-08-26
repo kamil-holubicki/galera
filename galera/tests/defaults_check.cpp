@@ -26,6 +26,9 @@ static const char* const VARIABLE = "variable";
 
 static const char* Defaults[] =
 {
+    "allocator.disk_pages_encryption", "yes",
+    "allocator.encryption_cache_page_size", "32K",
+    "allocator.encryption_cache_size", "16777216",
     "base_dir",                    ".",
     "base_port",                   "4567",
     "cert.log_conflicts",          "no",
@@ -65,6 +68,9 @@ static const char* Defaults[] =
     "gcache.freeze_purge_at_seqno", "-1",
     "gcache.keep_pages_count",      "0",
     "gcache.size",                 "128M",
+    "gcache.encryption",           "yes",
+    "gcache.encryption_cache_page_size", "32K",
+    "gcache.encryption_cache_size", "16777216",
     "gcomm.thread_prio",           "",
     "gcs.fc_debug",                "0",
     "gcs.fc_factor",               "1.0",
@@ -276,6 +282,9 @@ START_TEST(defaults)
 
             NULL, // wsrep_abort_cb_t
             NULL, // wsrep_pfs_instr_cb_t
+
+            NULL, // wsrep_enc_get_key_cb_t
+            NULL, // wsrep_enc_new_key_cb_t
         };
     ret = provider.init(&provider, &init_args);
     ck_assert(WSREP_OK == ret);

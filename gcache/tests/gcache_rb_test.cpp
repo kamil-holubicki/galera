@@ -12,6 +12,7 @@
 
 #include <gu_logger.hpp>
 #include <gu_throw.hpp>
+#include <gu_init.h>
 
 using namespace gcache;
 
@@ -28,6 +29,13 @@ static size_type ALLOC_SIZE(size_type s)
 
 START_TEST(test1)
 {
+    // Initialize utils. Ring buffer needs CRC.
+    // It is done by replicator constructor, but we use RB directly here.
+    gu_init(nullptr, [](wsrep_pfs_instr_type_t,
+                        wsrep_pfs_instr_ops_t,
+                        wsrep_pfs_instr_tag_t, void **,
+                        void **, const void *) {});             
+
     ::unlink(RB_NAME.c_str());
 
     size_t const rb_size(ALLOC_SIZE(2) * 2);
@@ -123,6 +131,13 @@ END_TEST
 
 START_TEST(recovery)
 {
+    // Initialize utils. Ring buffer needs CRC.
+    // It is done by replicator constructor, but we use GCache directly here.
+    gu_init(nullptr, [](wsrep_pfs_instr_type_t,
+                        wsrep_pfs_instr_ops_t,
+                        wsrep_pfs_instr_tag_t, void **,
+                        void **, const void *) {});             
+
     struct msg
     {
         char    msg;
