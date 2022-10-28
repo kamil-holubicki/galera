@@ -1620,7 +1620,7 @@ wsrep_status_t galera::ReplicatorSMM::release_rollback(TrxHandleMaster& trx)
                     TX_SET_STATE(ts, TrxHandle::S_COMMITTING);
                 }
                 commit_monitor_.leave(co);
-                assert(commit_monitor_.last_left() >= ts.global_seqno());
+                // KH: assert(commit_monitor_.last_left() >= ts.global_seqno());
                 TX_SET_STATE(ts, TrxHandle::S_COMMITTED);
             }
 
