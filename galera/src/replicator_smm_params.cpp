@@ -33,7 +33,7 @@ galera::ReplicatorSMM::Defaults::Defaults() : map_()
     map_.insert(Default(Param::base_dir, BASE_DIR_DEFAULT));
     map_.insert(Default(Param::proto_max,  gu::to_string(MAX_PROTO_VER)));
     map_.insert(Default(Param::key_format, "FLAT8"));
-    map_.insert(Default(Param::commit_order, "3"));
+    map_.insert(Default(Param::commit_order, "2"));
     map_.insert(Default(Param::causal_read_timeout, "PT30S"));
     const int max_write_set_size(galera::WriteSetNG::MAX_SIZE);
     map_.insert(Default(Param::max_write_set_size,
