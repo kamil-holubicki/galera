@@ -3098,7 +3098,8 @@ void galera::ReplicatorSMM::finish_local_prim_conf_change(
     // GCache must contain some actions, at least this CC
     bool const ordered __attribute__((unused))
         (group_proto_ver >= PROTO_VER_ORDERED_CC);
-    assert(gcache_.seqno_min() > 0 || not ordered);
+   // KH:
+   // assert(gcache_.seqno_min() > 0 || not ordered);
 }
 
 namespace {

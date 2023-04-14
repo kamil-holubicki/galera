@@ -1275,6 +1275,15 @@ ReplicatorSMM::request_state_transfer (void* recv_ctx,
                     cert_position,
                     std::get<0>(get_trx_protocol_versions(group_proto_ver)));
                 // with higher versions this happens in cert index preload
+            } else if (trivial) {
+                // Rolling upgrade from Galera 3 PROTO_VER_GALERA_3_MAX.
+                gu::GTID const cert_position
+                    (sst_uuid_, std::max(cc_seqno, sst_seqno_));
+                cert_.assign_initial_position(
+                    cert_position,
+                    std::get<0>(get_trx_protocol_versions(group_proto_ver)));
+                // with higher versions this happens in cert index preload
+                establish_protocol_versions(group_proto_ver);
             }
 
             apply_monitor_.set_initial_position(WSREP_UUID_UNDEFINED, -1);
@@ -1370,20 +1379,23 @@ ReplicatorSMM::request_state_transfer (void* recv_ctx,
                          << ist_from - 1;
             }
 
-            ist_receiver_.ready(ist_from);
-            recv_IST(recv_ctx);
+            if (!trivial) {
+                ist_receiver_.ready(ist_from);
+                recv_IST(recv_ctx);
+            }
 
 #ifdef PXC
             // We must close the IST receiver if the node
             // is in the process of shutting down:
-            if (ist_prepared_)
-            {
-                ist_prepared_ = false;
-            }
+            ist_prepared_ = false;
 #endif /* PXC */
+#if 1
+            wsrep_seqno_t ist_seqno_tmp(ist_receiver_.finished());
+            wsrep_seqno_t const ist_seqno(trivial ? sst_seqno_ : ist_seqno_tmp);
 
+#else
             wsrep_seqno_t const ist_seqno(ist_receiver_.finished());
-
+#endif
             if (do_ist)
             {
                 assert(ist_seqno > sst_seqno_); // must exceed sst_seqno_
