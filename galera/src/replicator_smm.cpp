@@ -1336,16 +1336,25 @@ galera::ReplicatorSMM::preordered_commit(wsrep_po_handle_t&            handle,
 
         ws->set_preordered (pa_range); // also adds CRC
 
+        gcs_action act;
+        act.type = GCS_ACT_TORDERED;
+        act.size = actv_size;
+        act.buf = NULL;
+
         int rcode;
         do
         {
+//            gcs_.schedule();
+//            rcode = gcs_.replv(actv, act, true);
             rcode = gcs_.sendv(actv, actv_size, GCS_ACT_TORDERED, false);
         }
-        while (rcode == -EAGAIN && (usleep(1000), true));
+        while ((/* rcode == -ERESTART || */ rcode == -EAGAIN) && (usleep(1000), true));
 
-        if (rcode < 0)
+        if (rcode < 0) {
+            fprintf(stderr, "KH: preordered_commit err: %ld\n", rcode);
             gu_throw_error(-rcode)
                 << "Replication of preordered writeset failed.";
+        }
     }
 
     delete ws;

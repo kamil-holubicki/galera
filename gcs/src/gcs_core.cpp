@@ -85,6 +85,12 @@ struct gcs_core
 #endif
 };
 
+// KH:
+int
+gcs_group_my_idx (gcs_core_t *core) {
+    return core->group.my_idx;
+}
+
 // this is to pass local action info from send to recv thread.
 typedef struct core_act
 {
@@ -267,7 +273,7 @@ core_msg_send (gcs_core_t*    core,
         }
         else {
             ret = core_error (core->state);
-
+            fprintf(stderr, "KH: core_msg_send core_error: %ld, core->state: %d\n", ret, core->state);
             if (ret >= 0) {
                 gu_fatal ("GCS internal state inconsistency: "
                           "expected error condition.");
@@ -293,7 +299,7 @@ core_msg_send_retry (gcs_core_t*    core,
     ssize_t ret;
     while ((ret = core_msg_send (core, buf, buf_len, type)) == -EAGAIN) {
         /* wait for primary configuration - sleep 0.01 sec */
-        gu_debug ("Backend requested wait");
+        gu_warn ("Backend requested wait for PC");
         usleep (10000);
     }
 //    gu_debug ("returning: %d (%s)", ret, strerror(-ret));
@@ -544,7 +550,7 @@ core_handle_act_msg (gcs_core_t*          core,
             assert (0);
             return -ENOTRECOVERABLE;
         }
-
+        // KH:
         ret = gcs_group_handle_act_msg (group, &frg, msg, act,
                                         commonly_supported_version);
 
@@ -595,12 +601,14 @@ core_handle_act_msg (gcs_core_t*          core,
                 }
 
                 assert (act->id < 0 || CORE_PRIMARY == core->state);
-
+                // KH:
                 if (gu_unlikely(CORE_PRIMARY != core->state)) {
                     // there can be a tiny race with gcs_core_close(),
                     // so CORE_CLOSED allows TO delivery.
                     assert (act->id < 0 /*#275|| CORE_CLOSED == core->state*/);
+                    fprintf(stderr, "KH:(1) act->id: %ld, core->state: %d\n", act->id, core->state);
                     if (act->id < 0) act->id = core_error (core->state);
+                    fprintf(stderr, "KH:(2) act->id: %ld, core->state: %d\n", act->id, core->state);
                 }
             }
 
@@ -1112,7 +1120,7 @@ ssize_t gcs_core_recv (gcs_core_t*          conn,
         }
 
         switch (recv_msg->type) {
-        case GCS_MSG_ACTION:
+        case GCS_MSG_ACTION:  // KH:
             ret = core_handle_act_msg(conn, recv_msg, recv_act);
             assert (ret == recv_act->act.buf_len || ret <= 0);
             break;

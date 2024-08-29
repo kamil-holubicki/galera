@@ -37,6 +37,9 @@ gcs_core_register (gu_config_t* conf);
 struct gcs_core;
 typedef struct gcs_core gcs_core_t;
 
+// KH
+extern int gcs_group_my_idx (gcs_core_t *core);
+
 /*
  * Allocates context resources  private to
  * generic communicaton layer - send/recieve buffers and the like.

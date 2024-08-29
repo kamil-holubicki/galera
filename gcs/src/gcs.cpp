@@ -27,6 +27,7 @@
 #include "gcs_fifo_lite.hpp"
 #include "gcs_sm.hpp"
 #include "gcs_gcache.hpp"
+#include "gcs_core.hpp"
 
 const char* gcs_node_state_to_str (gcs_node_state_t state)
 {
@@ -1365,7 +1366,7 @@ static void *gcs_recv_thread (void *arg)
         gcs_seqno_t this_act_id = GCS_SEQNO_ILL;
         struct gcs_repl_act** repl_act_ptr;
         struct gcs_act_rcvd   rcvd;
-
+        // KH:
         ret = gcs_core_recv (conn->core, &rcvd, conn->timeout);
 
         if (gu_unlikely(ret <= 0)) {
@@ -1423,7 +1424,17 @@ static void *gcs_recv_thread (void *arg)
             /* successful delivery - increment local order */
             this_act_id = gu_atomic_fetch_and_add(&conn->local_act_id, 1);
         }
-
+        // KH: only actions sent by gcs.replv will be in repl_q
+        // if we send it with gcs.sendv it won't be there
+        // replv sends the message synchroneously (with confirmation)
+        // which happens below.
+        // sendv just sends it, so we never get to below 'if'
+        // The point of having error -11 or -107 in rcvd.id is being able to say
+        // to the replv sender that there was an error and retry is needed
+        // But this mechanism doesn't work in case of sendv whatsoever!
+        // Unfortunately there is no way to detect here how the message was sent
+        // The best we can do is to assume that if it is not in repl_q, it was sendv
+        // But in such a case in case of error we can't abort in last two else-ifs!
         if (NULL != rcvd.local                                          &&
             (repl_act_ptr = (struct gcs_repl_act**)
              gcs_fifo_lite_get_head (conn->repl_q))                     &&
@@ -1486,16 +1497,24 @@ static void *gcs_recv_thread (void *arg)
 //                    "action %p", rcvd.act.type, rcvd.act.buf_len,
 //                    this_act_id, rcvd.act.buf);
         }
-        else if (conn->my_idx == rcvd.sender_idx)
+        //else if (conn->my_idx == rcvd.sender_idx)  // KH: conn->my_idx somehow can be not my index (lol)
+                                                    // that's probably why we can get
+                                                    // Protocol violation: unordered remote action:
+                                                    // as reported in the ticket.
+                                                    // however if we get my index as gcs_group_my_idx(conn->core->group)
+                                                    // we get the idx matching sender index
+                                                    // Alos recvd.local is not empty, which means it is a local action
+        else if (gcs_group_my_idx(conn->core) == rcvd.sender_idx)
         {
             gu_fatal("Protocol violation: unordered local action not in repl_q:"
                      " { {%p, %zd, %s}, %ld, %lld }.",
                      rcvd.act.buf, rcvd.act.buf_len,
                      gcs_act_type_to_str(rcvd.act.type), rcvd.sender_idx,
                      rcvd.id);
-            assert(0);
-            ret = -ENOTRECOVERABLE;
-            break;
+            // KH: well, ignore it
+            // assert(0);
+            // ret = -ENOTRECOVERABLE;
+            // break;
         }
         else
         {
@@ -1504,6 +1523,7 @@ static void *gcs_recv_thread (void *arg)
                       rcvd.act.buf, rcvd.act.buf_len,
                       gcs_act_type_to_str(rcvd.act.type), rcvd.sender_idx,
                       rcvd.id);
+            // KH: todo: how can it happen?
             assert (0);
             ret = -ENOTRECOVERABLE;
             break;
@@ -1789,7 +1809,7 @@ long gcs_replv (gcs_conn_t*          const conn,      //!<in
                 (act_ptr = (struct gcs_repl_act**)gcs_fifo_lite_get_tail (conn->repl_q)))
             {
                 *act_ptr = &repl_act;
-                gcs_fifo_lite_push_tail (conn->repl_q);
+                gcs_fifo_lite_push_tail (conn->repl_q);  // KH:
 
                 // Keep on trying until something else comes out
                 while ((ret = gcs_core_send (conn->core, act_in, act->size,

@@ -193,12 +193,13 @@ gcs_group_handle_act_msg (gcs_group_t*          const group,
              * and only in PRIM (skip messages while in state exchange) */
             rcvd->id = ++group->act_id_;
         }
-        else if (GCS_ACT_TORDERED  == rcvd->act.type) {
+        else if (GCS_ACT_TORDERED  == rcvd->act.type) {  // KH:
             /* Rare situations */
             if (local) {
-                /* Let the sender know that it failed */
+                /* Let the sender know that it failed */ // KH: why?
                 rcvd->id = -ERESTART;
-                gu_debug("Returning -ERESTART for TORDERED action: group->state"
+                fprintf(stderr, "KH: Returning -ERESTART\n");
+                gu_warn("Returning -ERESTART for TORDERED action: group->state"
                          " = %s, sender->status = %s, frag_reset = %s, "
                          "buf = %p",
                          gcs_group_state_str[group->state],
@@ -227,6 +228,7 @@ gcs_group_is_primary (const gcs_group_t* group)
 {
     return (GCS_GROUP_PRIMARY == group->state);
 }
+
 
 static inline int
 gcs_group_my_idx (const gcs_group_t* group)
