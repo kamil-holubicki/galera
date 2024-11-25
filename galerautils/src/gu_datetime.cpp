@@ -247,4 +247,8 @@ void gu::datetime::Period::parse(const std::string& str)
     {
         nsecs = seconds_from_string(str);
     }
+
+#if defined(USE_VALGRIND) || defined(USE_ASAN)
+    nsecs *= 10;
+#endif
 }
