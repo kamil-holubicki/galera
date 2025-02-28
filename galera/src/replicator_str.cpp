@@ -1040,10 +1040,9 @@ ReplicatorSMM::request_state_transfer (void* recv_ctx,
     assert(sst_req_len >= 0);
     int const str_proto_ver(get_str_proto_ver(group_proto_ver));
 
-    StateRequest* const req(prepare_state_request(sst_req, sst_req_len,
-                                                  group_proto_ver,
-                                                  str_proto_ver,
-                                                  group_uuid, cc_seqno));
+    std::shared_ptr<StateRequest> req(
+        prepare_state_request(sst_req, sst_req_len, group_proto_ver,
+                              str_proto_ver, group_uuid, cc_seqno));
 #ifdef PXC
     sst_mutex_.lock();
 #else
@@ -1108,7 +1107,6 @@ ReplicatorSMM::request_state_transfer (void* recv_ctx,
             ist_prepared_ = false;
             (void)ist_receiver_.finished();
         }
-        delete req;
         return ret;
     }
 
@@ -1204,7 +1202,6 @@ ReplicatorSMM::request_state_transfer (void* recv_ctx,
             /* this is now being done as part of the caller action. */
             // close();
 
-            delete req;
             return -ECANCELED;
         }
         else if (sst_uuid_ != group_uuid)
@@ -1472,7 +1469,6 @@ ReplicatorSMM::request_state_transfer (void* recv_ctx,
     }
 #endif /* NDEBUG */
 
-    delete req;
 #ifdef PXC
     return 0;
 #endif /* PXC */
