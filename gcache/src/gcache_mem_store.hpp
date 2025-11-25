@@ -114,7 +114,10 @@ namespace gcache
             {
                 if (bh != orig)
                 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wuse-after-free"
                     allocd_.erase(orig);
+#pragma GCC diagnostic pop
                     allocd_.insert(bh);
                 }
 
