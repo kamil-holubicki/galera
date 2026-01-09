@@ -3385,6 +3385,14 @@ wsrep_seqno_t galera::ReplicatorSMM::pause()
 
     // Get drain seqno from cert index
     wsrep_seqno_t const upto(cert_.position());
+    if (apply_monitor_.last_left() < upto || commit_monitor_.last_left() < upto)
+    {
+        LocalOrder lo2(pause_seqno_);
+        pause_seqno_ = WSREP_SEQNO_UNDEFINED;
+        local_monitor_.leave(lo2);
+        return -1;
+    }
+
     drain_monitors(upto);
 
     assert (apply_monitor_.last_left() >= upto);
