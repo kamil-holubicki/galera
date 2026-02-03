@@ -3381,6 +3381,15 @@ wsrep_seqno_t galera::ReplicatorSMM::pause()
     // Local monitor should take care that concurrent
     // pause requests are enqueued
     assert(pause_seqno_ == WSREP_SEQNO_UNDEFINED);
+
+    // If already paused (e.g. re-entrant call from same thread/context),
+    // don't crash in debug builds. Return current position.
+    if (pause_seqno_ != WSREP_SEQNO_UNDEFINED)
+    {
+        log_warn << "pause() called while already paused at " << pause_seqno_;
+        local_monitor_.leave(lo);
+        return last_committed();
+    }
     pause_seqno_ = local_seqno;
 
     // Get drain seqno from cert index
@@ -3402,6 +3411,59 @@ wsrep_seqno_t galera::ReplicatorSMM::pause()
 
     return ret;
 }
+
+#ifdef PXC
+wsrep_seqno_t galera::ReplicatorSMM::try_pause()
+{
+    // Grab local seqno for local_monitor_
+    wsrep_seqno_t const local_seqno(
+        static_cast<wsrep_seqno_t>(gcs_.local_sequence()));
+    LocalOrder lo(local_seqno);
+
+    // If local monitor window would block, don't attempt to pause now.
+    if (local_monitor_.would_block(local_seqno))
+    {
+        return WSREP_SEQNO_UNDEFINED;
+    }
+
+    if (pause_seqno_ != WSREP_SEQNO_UNDEFINED)
+    {
+        return last_committed();
+    }
+    local_monitor_.enter(lo);
+
+    // Get drain seqno from cert index (same boundary as pause()).
+    wsrep_seqno_t const upto(cert_.position());
+
+    // Non-blocking check: if monitors have not drained up to 'upto',
+    // pausing would block waiting for apply/commit to catch up.
+    if (apply_monitor_.last_left() < upto)
+    {
+        local_monitor_.leave(lo);
+        return WSREP_SEQNO_UNDEFINED;
+    }
+    if (co_mode_ != CommitOrder::BYPASS &&
+        commit_monitor_.last_left() < upto)
+    {
+        local_monitor_.leave(lo);
+        return WSREP_SEQNO_UNDEFINED;
+    }
+
+    // We are going to keep local_monitor_ held until resume(), so record the
+    // pause seqno only after all fail-fast checks have passed.
+    pause_seqno_ = local_seqno;
+
+    drain_monitors(upto);
+
+    wsrep_seqno_t const ret(last_committed());
+    st_.set(state_uuid_, ret, safe_to_bootstrap_);
+
+    log_info << "Provider try-paused at " << state_uuid_ << ':' << ret
+             << " (" << pause_seqno_ << ")";
+
+    return ret;
+}
+#endif /* PXC */
 
 void galera::ReplicatorSMM::resume()
 {
