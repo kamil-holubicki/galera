@@ -1,5 +1,5 @@
 [submodule "wsrep-API"]
 	path = wsrep/src
-	url = https://github.com/jaideepkarande/wsrep-API.git
-	branch = PXC-4799-4x-80
+	url = https://github.com/kamil-holubicki/wsrep-API.git
+	branch = PXC-4799-PoC-v2
 

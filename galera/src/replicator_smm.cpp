@@ -3413,11 +3413,10 @@ wsrep_seqno_t galera::ReplicatorSMM::pause()
 }
 
 #ifdef PXC
-wsrep_seqno_t galera::ReplicatorSMM::try_pause()
-{
-    // Grab local seqno for local_monitor_
+wsrep_seqno_t galera::ReplicatorSMM::try_desync_and_pause() {
     wsrep_seqno_t const local_seqno(
         static_cast<wsrep_seqno_t>(gcs_.local_sequence()));
+
     LocalOrder lo(local_seqno);
 
     // If local monitor window would block, don't attempt to pause now.
@@ -3426,17 +3425,17 @@ wsrep_seqno_t galera::ReplicatorSMM::try_pause()
         return WSREP_SEQNO_UNDEFINED;
     }
 
-    if (pause_seqno_ != WSREP_SEQNO_UNDEFINED)
-    {
-        return last_committed();
-    }
     local_monitor_.enter(lo);
 
-    // Get drain seqno from cert index (same boundary as pause()).
+    wsrep_seqno_t seqno_l;
+
+    if (local_seqno <= 0) {
+        return WSREP_SEQNO_UNDEFINED;
+    }
+
+    // Get drain seqno from cert index
     wsrep_seqno_t const upto(cert_.position());
 
-    // Non-blocking check: if monitors have not drained up to 'upto',
-    // pausing would block waiting for apply/commit to catch up.
     if (apply_monitor_.last_left() < upto)
     {
         local_monitor_.leave(lo);
@@ -3449,16 +3448,58 @@ wsrep_seqno_t galera::ReplicatorSMM::try_pause()
         return WSREP_SEQNO_UNDEFINED;
     }
 
-    // We are going to keep local_monitor_ held until resume(), so record the
-    // pause seqno only after all fail-fast checks have passed.
-    pause_seqno_ = local_seqno;
+    ssize_t desync_ret = gcs_.desync(seqno_l);
+
+    if (seqno_l != local_seqno+1) {
+        fprintf(stderr, "GCS desync returned seqno %lu, expected %lu\n",
+                static_cast<unsigned long>(seqno_l),
+                static_cast<unsigned long>(local_seqno+1));
+    }
+    assert(seqno_l == local_seqno+1);  // KH: true? I think it should be so...
+
+    // this part is ugly, but we need to move to the next seqno returned by desync
+    local_monitor_.leave(lo);
+    LocalOrder lo2(seqno_l);
+    local_monitor_.enter(lo2);
+
+    if (desync_ret == 0)
+    {
+        if (state_() != S_DONOR) state_.shift_to(S_DONOR);
+#ifdef PXC
+        GU_DBUG_SYNC_WAIT("wsrep_desync_left_local_monitor");
+#endif /* PXC */
+    }
+#ifdef PXC
+    else if (desync_ret != -EAGAIN)
+#else
+    else
+#endif /* PXC */
+    {
+        local_monitor_.self_cancel(lo2);
+    }
+
+    if (desync_ret)
+    {
+        gu_throw_error(-desync_ret) << gcs_error_str(-desync_ret);
+    }
+    // end of desync
+    // start of pause
+    // everything without releasing local monitor
+    pause_seqno_ = seqno_l;
 
     drain_monitors(upto);
+
+    assert (apply_monitor_.last_left() >= upto);
+    if (co_mode_ != CommitOrder::BYPASS)
+    {
+        assert (commit_monitor_.last_left() >= upto);
+        assert (commit_monitor_.last_left() == apply_monitor_.last_left());
+    }
 
     wsrep_seqno_t const ret(last_committed());
     st_.set(state_uuid_, ret, safe_to_bootstrap_);
 
-    log_info << "Provider try-paused at " << state_uuid_ << ':' << ret
+    log_info << "Provider paused at " << state_uuid_ << ':' << ret
              << " (" << pause_seqno_ << ")";
 
     return ret;
@@ -3480,6 +3521,7 @@ void galera::ReplicatorSMM::resume()
     local_monitor_.leave(lo);
     log_info << "Provider resumed.";
 }
+
 
 void galera::ReplicatorSMM::desync()
 {

@@ -183,7 +183,7 @@ namespace galera
 
         wsrep_seqno_t pause();
 #ifdef PXC
-        wsrep_seqno_t try_pause();
+        wsrep_seqno_t try_desync_and_pause();
 #endif /* PXC */
         void          resume();
 
